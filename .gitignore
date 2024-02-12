@@ -2,3 +2,5 @@
 *.*
 #except php files
 !*.cs
+!*.sln
+!*.csproj
