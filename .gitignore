@@ -4,3 +4,4 @@
 !*.cs
 !*.sln
 !*.csproj
+!*.json
