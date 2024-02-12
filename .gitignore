@@ -1,7 +1,6 @@
-#ignore all kind of files
-*.*
-#except php files
-!*.cs
-!*.sln
-!*.csproj
-!*.json
+*.suo
+*.user
+_ReSharper.*
+bin
+obj
+packages
