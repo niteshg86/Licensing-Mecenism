@@ -48,7 +48,24 @@
                     // Use sharedSecret for encryption/decryption
                 }
 
+                // Intercept the response
+                var originalBodyStream = context.Response.Body;
+                using var responseBodyStream = new MemoryStream();
+                context.Response.Body = responseBodyStream;
+
                 await _next(context);
+
+                // Derive the shared secret and encrypt the response
+                responseBodyStream.Seek(0, SeekOrigin.Begin);
+                var plainTextResponse = await new StreamReader(responseBodyStream).ReadToEndAsync();
+                var sharedSecret = ecdh.DeriveKeyMaterial(CngKey.Import(/* Other party's public key */, CngKeyBlobFormat.EccPublicBlob));
+                var iv = new byte[16];
+                var encryptedResponse = AesEncryptionHelper.EncryptStringToBytes_Aes(plainTextResponse, sharedSecret, iv);
+
+                // Reset the original response body and write the encrypted content
+                context.Response.Body = originalBodyStream;
+                context.Response.ContentLength = encryptedResponse.Length; // Ensure the content length is set to the encrypted data length
+                await context.Response.Body.WriteAsync(encryptedResponse, 0, encryptedResponse.Length);
             }
             else
             {
