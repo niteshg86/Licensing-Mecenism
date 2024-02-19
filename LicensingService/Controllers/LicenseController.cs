@@ -10,8 +10,16 @@ namespace LicensingService.Controllers
         [HttpPost("isLicensed")]
         public IActionResult IsLicensed([FromBody] LicenseRequest request)
         {
+            bool isLicensed = false;
             // Your logic to determine if the feature is licensed
-            bool isLicensed = true; // Example logic
+            if (request != null) 
+            { 
+               if(request.FeatureName=="ABC")
+                {
+                    isLicensed = true;
+                }
+            }
+           ; // Example logic
             return Ok(isLicensed);
         }
 
