@@ -20,31 +20,64 @@ namespace LicenseProxy
 
         public async Task<LicenseStatusResponse> IsLicensed(LicenseRequest request)
         {
+            
             // Generate a unique cache key based on the request parameters
             var cacheKey = $"LicenseStatus-{request.FeatureName}-{request.FeatureVersion}";
 
             // Try to get the response from cache
-            if (_memoryCache.TryGetValue(cacheKey, out LicenseStatusResponse cachedResponse))
-            {
-                return cachedResponse; // Return the cached response if available
-            }
+            //if (_memoryCache.TryGetValue(cacheKey, out LicenseStatusResponse cachedResponse))
+            //{
+            //    return cachedResponse; // Return the cached response if available
+            //}
+
+            using var dh = new DiffieHellmanKeyExchange();
+            var publicKey = dh.PublicKey;
 
             // If not in cache, make the API call
             var json = JsonSerializer.Serialize(request);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
-            var response = await _httpClient.PostAsync("License/IsLicensed", content);
+
+            // Add the public key to the request headers
+            _httpClient.DefaultRequestHeaders.Clear();
+            _httpClient.DefaultRequestHeaders.Add("Public-Key", Convert.ToBase64String(publicKey));
+
+            // Make the API call
+            var response = await _httpClient.PostAsync("Api/License/IsLicensed", content);
             response.EnsureSuccessStatusCode();
 
-            var responseString = await response.Content.ReadAsStringAsync();
-            var licenseStatusResponse = new LicenseStatusResponse
+            LicenseStatusResponse licenseStatusResponse = null;
+            if (response.Headers.TryGetValues("Public-Key", out var serverPublicKeyValues))
             {
-                LicenseStatus = responseString == "true" ? 1 : 0
-            };
+                var serverPublicKey = Convert.FromBase64String(serverPublicKeyValues.FirstOrDefault());
+                var secret = dh.DeriveKey(serverPublicKey);
+
+                // Read the encrypted response
+                var encryptedResponse = await response.Content.ReadAsByteArrayAsync();
+                var iv = new byte[16];
+                // Decrypt the response using the derived secret
+                var decryptedResponseJson = AesEncryptionHelper.DecryptStringFromBytes_Aes(encryptedResponse, secret,iv);
+
+                // Deserialize the decrypted response JSON to an object
+                //licenseStatusResponse = JsonSerializer.Deserialize<LicenseStatusResponse>(decryptedResponseJson);
+                licenseStatusResponse = new LicenseStatusResponse
+                {
+                    LicenseStatus = decryptedResponseJson == "true" ? 1 : 0
+                };
+
+            }
+
+            //var responseString = await response.Content.ReadAsStringAsync();
+            //var licenseStatusResponse = new LicenseStatusResponse
+            //{
+            //    LicenseStatus = responseString == "true" ? 1 : 0
+            //};
 
             // Store the response in cache
-            _memoryCache.Set(cacheKey, licenseStatusResponse, _cacheExpiration);
+            //_memoryCache.Set(cacheKey, licenseStatusResponse, _cacheExpiration);
 
             return licenseStatusResponse;
+
+
         }
     }
 

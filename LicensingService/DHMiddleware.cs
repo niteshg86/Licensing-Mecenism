@@ -23,13 +23,12 @@
                 {
                     KeyDerivationFunction = ECDiffieHellmanKeyDerivationFunction.Hash,
                     HashAlgorithm = CngAlgorithm.Sha256,
-                    
-                };
-                ecdh.KeySize = 256; // Set the key size (256, 384, or 521 bits for P-256, P-384, P-521 curves)
-                                    // Set the SecretPrepend and SecretAppend if using Hash or Hmac for KDF
-                ecdh.SecretPrepend = Encoding.UTF8.GetBytes("ABC");
-                ecdh.SecretAppend = Encoding.UTF8.GetBytes("XYZ");
-
+                    KeySize=256,
+                    SecretPrepend = Encoding.UTF8.GetBytes("ABC"),
+                    SecretAppend = Encoding.UTF8.GetBytes("XYZ")
+            };
+                ecdh.GenerateKey(ECCurve.NamedCurves.nistP256);
+               
                 var publicKey = ecdh.PublicKey.ToByteArray();
 
                 // Add your public key to response header
@@ -39,14 +38,7 @@
                     return Task.CompletedTask;
                 });
 
-                if (context.Request.Headers.TryGetValue("Public-Key", out var clientPublicKey))
-                {
-                    var cngKey = CngKey.Import(Convert.FromBase64String(clientPublicKey), CngKeyBlobFormat.EccPublicBlob);
-                    var clientPubKey = new ECDiffieHellmanCng(cngKey);
-                    var sharedSecret = ecdh.DeriveKeyMaterial(clientPubKey.PublicKey);
-
-                    // Use sharedSecret for encryption/decryption
-                }
+              
 
                 // Intercept the response
                 var originalBodyStream = context.Response.Body;
@@ -58,14 +50,21 @@
                 // Derive the shared secret and encrypt the response
                 responseBodyStream.Seek(0, SeekOrigin.Begin);
                 var plainTextResponse = await new StreamReader(responseBodyStream).ReadToEndAsync();
-                var sharedSecret = ecdh.DeriveKeyMaterial(CngKey.Import(/* Other party's public key */, CngKeyBlobFormat.EccPublicBlob));
-                var iv = new byte[16];
-                var encryptedResponse = AesEncryptionHelper.EncryptStringToBytes_Aes(plainTextResponse, sharedSecret, iv);
+                byte[] sharedSecret = null;
+                if (context.Request.Headers.TryGetValue("Public-Key", out var clientPublicKey))
+                {
+                    var cngKey = CngKey.Import(Convert.FromBase64String(clientPublicKey), CngKeyBlobFormat.EccPublicBlob);
+                    var clientPubKey = new ECDiffieHellmanCng(cngKey);
+                     sharedSecret = ecdh.DeriveKeyMaterial(clientPubKey.PublicKey);
 
-                // Reset the original response body and write the encrypted content
-                context.Response.Body = originalBodyStream;
-                context.Response.ContentLength = encryptedResponse.Length; // Ensure the content length is set to the encrypted data length
-                await context.Response.Body.WriteAsync(encryptedResponse, 0, encryptedResponse.Length);
+                    var iv = new byte[16];
+                    var encryptedResponse = AesEncryptionHelper.EncryptStringToBytes_Aes(plainTextResponse, sharedSecret, iv);
+                    // Reset the original response body and write the encrypted content
+                    context.Response.Body = originalBodyStream;
+                    context.Response.ContentLength = encryptedResponse.Length; // Ensure the content length is set to the encrypted data length
+                    await context.Response.Body.WriteAsync(encryptedResponse, 0, encryptedResponse.Length);
+                }
+                               
             }
             else
             {
