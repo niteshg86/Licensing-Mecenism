@@ -31,7 +31,7 @@ namespace LicenseProxy
             //}
 
             using var dh = new DiffieHellmanKeyExchange();
-            var publicKey = dh.PublicKey;
+            var publicKey = dh.publicKey;
 
             // If not in cache, make the API call
             var json = JsonSerializer.Serialize(request);
@@ -49,7 +49,7 @@ namespace LicenseProxy
             if (response.Headers.TryGetValues("Public-Key", out var serverPublicKeyValues))
             {
                 var serverPublicKey = Convert.FromBase64String(serverPublicKeyValues.FirstOrDefault());
-                var secret = dh.DeriveKey(serverPublicKey);
+                var secret = dh.DeriveAesKey(serverPublicKey, "ABC", "XYZ", 32);
 
                 // Read the encrypted response
                 var encryptedResponse = await response.Content.ReadAsByteArrayAsync();
